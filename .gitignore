@@ -1,0 +1,4 @@
+.idea
+.venv
+myproject/api/migrations
+myproject/db.sqlite3
