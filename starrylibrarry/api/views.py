@@ -5,10 +5,13 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
 from django.shortcuts import get_object_or_404
 
+
+from .auth import CookieJWTAuth
 from .schemas import *
 
 from .models import Role, Profile, FandomCategory, Fandom, TagCategory, Tag, Direction, Work, Chapter, Review
 
+from ninja.responses import Response
 from ninja import Form, File, UploadedFile
 from ninja.errors import HttpError
 from ninja_extra import NinjaExtraAPI, api_controller, route, permissions
@@ -20,16 +23,16 @@ from ninja_jwt.tokens import RefreshToken
 
 User = get_user_model()
 
-api = NinjaExtraAPI(auth=None)
+api = NinjaExtraAPI(auth=[CookieJWTAuth()])
 api.register_controllers(NinjaJWTDefaultController)
-api.auth = [JWTAuth()]
+api.auth = [JWTAuth]
 
 
 # =====================
 # PUBLIC END-POINTS heh ;0 --- --- --- ПУБЛИЧНЫЕ ЭНД-ПОИНТЫ ДЛЯ РЕГИСТРАЦИИ И ВХОДА
 # =====================
 @api_controller("/", auth=None, permissions=[permissions.AllowAny])
-class UserController:
+class AuthController:
     @route.post("register", response=UserOut)
     def register(self, request, data: UserCreate):
         user = User.objects.create_user(
@@ -61,10 +64,16 @@ class UserController:
         user = authenticate(username=data.username, password=data.password)
         if not user:
             raise HttpError(401, "Invalid credentials")
-        # именно здесь генерим пару токенов
+
         refresh = RefreshToken.for_user(user)
         access = str(refresh.access_token)
-        return {"access": access, "refresh": str(refresh)}
+
+        # Формируем Response из ninja, а не из Django напрямую
+        response = Response({"access": access, "refresh": str(refresh)})
+        # Устанавливаем куки
+        response.set_cookie("access_token", access, httponly=True, samesite="Lax")
+        response.set_cookie("refresh_token", str(refresh), httponly=True, samesite="Lax")
+        return response
 
 
 # =====================
@@ -139,7 +148,7 @@ class PublicController:
 # AUTH END-POINTS heh ;0 --- --- --- АВТОРИЗОВАННЫЕ ЭНД-ПОИНТЫ
 # =====================
 @api_controller("/", auth=[JWTAuth()], permissions=[permissions.IsAuthenticated])
-class AuthController:
+class UserController:
 
     # ----- Профиль -----
     @route.get("users/me", response=UserOut)
@@ -150,6 +159,18 @@ class AuthController:
             username=user.username,
             email=user.email,
             roles=[RoleOut.from_orm(r) for r in user.roles.all()]
+        )
+
+    @route.get("users/me/profile", response=ProfileOut)
+    def get_profile(self, request):
+        """
+        GET /api/users/me/profile
+        Возвращает avatar (URL) и description текущего пользователя.
+        """
+        prof = request.user.profile
+        return ProfileOut(
+            avatar=request.build_absolute_uri(prof.avatar.url) if prof.avatar else None,
+            description=prof.description
         )
 
     @route.put("users/me/profile", response=ProfileOut)
@@ -527,4 +548,5 @@ api.register_controllers(
     PublicController,
     AdminController,
     AuthController,
+    ContentController,
 )
