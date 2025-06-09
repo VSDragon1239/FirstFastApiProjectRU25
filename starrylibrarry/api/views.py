@@ -26,10 +26,10 @@ api.auth = [JWTAuth()]
 
 
 # =====================
-# PUBLIC END-POINTS heh ;0 --- --- --- ПУБЛИЧНЫЕ ЭНД-ПОИНТЫ
+# PUBLIC END-POINTS heh ;0 --- --- --- ПУБЛИЧНЫЕ ЭНД-ПОИНТЫ ДЛЯ РЕГИСТРАЦИИ И ВХОДА
 # =====================
 @api_controller("/", auth=None, permissions=[permissions.AllowAny])
-class PublicController:
+class UserController:
     @route.post("register", response=UserOut)
     def register(self, request, data: UserCreate):
         user = User.objects.create_user(
@@ -43,6 +43,35 @@ class PublicController:
             email=user.email,
             roles=[]
         )
+
+    @route.post("login", response=TokenPairOut, auth=None, summary="Login with username & password")
+    def login(self, request, data: LoginIn):
+        """
+        POST /api/auth/login    \n
+        {                       \n
+          "username": "Звезданутый Дракониус",   \n
+          "password": "1239"    \n
+        }                       \n
+        → { "access": "...", "refresh": "..." }     \n
+
+        :param request:         \n
+        :param data:            \n
+        :return:                \n
+        """
+        user = authenticate(username=data.username, password=data.password)
+        if not user:
+            raise HttpError(401, "Invalid credentials")
+        # именно здесь генерим пару токенов
+        refresh = RefreshToken.for_user(user)
+        access = str(refresh.access_token)
+        return {"access": access, "refresh": str(refresh)}
+
+
+# =====================
+# PUBLIC END-POINTS heh ;0 --- --- --- ПУБЛИЧНЫЕ ЭНД-ПОИНТЫ
+# =====================
+@api_controller("/", auth=None, permissions=[permissions.AllowAny])
+class PublicController:
 
     @route.get("fandom-categories", response=List[FandomCategoryOut])
     def list_fandom_categories(self, request):
@@ -185,9 +214,42 @@ class AuthController:
         u.roles.remove(role)
         return 204, None
 
-    # ----- CRUD для контента (пример для Work) -----
-    @route.post("works", response=WorkOut)
+    # # ----- CRUD для контента (пример для Work) -----
+    # @route.post("works", response=WorkOut)
+    # def create_work(self, request, data: WorkIn):
+    #     w = Work.objects.create(
+    #         author=request.user,
+    #         name=data.name,
+    #         direction_id=data.direction_id
+    #     )
+    #     w.tags.set(data.tag_ids)
+    #     w.fandoms.set(data.fandom_ids)
+    #     return WorkOut.from_orm(w)
+    #
+
+
+# =====================
+# AUTHOR END-POINTS heh ;0 --- --- --- АВТОРСКИЕ ЭНД-ПОИНТЫ
+# =====================
+@api_controller(
+    "/works",
+    auth=[JWTAuth()],
+    permissions=[permissions.IsAuthenticated],
+)
+class ContentController:
+
+    @route.post("", response=WorkOut)
     def create_work(self, request, data: WorkIn):
+        """
+        POST /api/works/
+        {
+          "name": "Новое произведение",
+          "direction_id": 1,
+          "tag_ids": [2,3],
+          "fandom_ids": [1]
+        }
+        ➔ создаёт Work.author = request.user
+        """
         w = Work.objects.create(
             author=request.user,
             name=data.name,
@@ -213,9 +275,69 @@ class AuthController:
         w.delete()
         return 204, None
 
+    @route.get("", response=List[WorkOut])
+    def list_my_works(self, request):
+        """
+        GET /api/works/
+        ➔ список произведений текущего пользователя
+        """
+        qs = Work.objects.filter(author=request.user) \
+                         .select_related("direction") \
+                         .prefetch_related("tags", "fandoms")
+        return [
+            WorkOut(
+                id=w.id,
+                name=w.name,
+                rating_count=w.rating_count,
+                direction=DirectionOut.from_orm(w.direction),
+                tags=[TagOut.from_orm(t) for t in w.tags.all()],
+                fandoms=[FandomOut.from_orm(f) for f in w.fandoms.all()],
+            ) for w in qs
+        ]
+
+    @route.post("/{work_id}/chapters", response=ChapterOut)
+    def create_chapter(self, request, work_id: int, data: ChapterIn):
+        """
+        POST /api/works/{work_id}/chapters
+        {
+          "title": "Глава 1",
+          "file": <файл>
+        }
+        ➔ создаёт Chapter.work = указанный work, проверяя, что вы — автор
+        """
+        w = get_object_or_404(Work, pk=work_id, author=request.user)
+        ch = Chapter.objects.create(
+            work=w,
+            title=data.title,
+            file=data.file  # UploadedFile из запроса
+        )
+        return ChapterOut(
+            id=ch.id,
+            work_id=ch.work_id,
+            title=ch.title,
+            file=request.build_absolute_uri(ch.file.url)
+        )
+
+    @route.get("/{work_id}/chapters", response=List[ChapterOut])
+    def list_my_chapters(self, request, work_id: int):
+        """
+        GET /api/works/{work_id}/chapters
+        ➔ список глав для вашего произведения
+        """
+        w = get_object_or_404(Work, pk=work_id, author=request.user)
+        qs = w.chapters.all()
+        return [
+            ChapterOut(
+                id=ch.id,
+                work_id=ch.work_id,
+                title=ch.title,
+                file=request.build_absolute_uri(ch.file.url)
+            ) for ch in qs
+        ]
+
 
 # =====================
-# AUTH END-POINTS heh ;0 --- --- --- АВТОРИЗОВАННЫЕ ЭНД-ПОИНТЫ для группы... (УЖЕ НЕ НАДО!!!)
+# ADMIN END-POINTS heh ;0 --- --- --- АДМИНИСТРАТИВНЫЕ ЭНД-ПОИНТЫ
 # =====================
 @api_controller("/admin", auth=[JWTAuth()], permissions=[permissions.IsAuthenticated])
 class AdminController:
@@ -401,7 +523,8 @@ class AdminController:
 
 # Чтобы было видно...
 api.register_controllers(
+    UserController,
     PublicController,
     AdminController,
-    # AuthController,
+    AuthController,
 )

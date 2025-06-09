@@ -1,6 +1,8 @@
 from ninja import Schema
 from typing import List, Optional
 
+from pydantic import EmailStr
+
 
 # ----- Роли -----
 class RoleIn(Schema):
@@ -24,6 +26,16 @@ class GroupOut(Schema):
 
 
 # ----- Пользователь & Профиль -----
+class LoginIn(Schema):
+    username: str
+    password: str
+
+
+class TokenPairOut(Schema):
+    access: str
+    refresh: str
+
+
 class UserCreate(Schema):
     username: str
     email: str
@@ -33,8 +45,11 @@ class UserCreate(Schema):
 class UserOut(Schema):
     id: int
     username: str
-    email: str
+    email: EmailStr
     roles: List[RoleOut]
+
+    class Config:
+        orm_mode = True
 
 
 class ProfileOut(Schema):
