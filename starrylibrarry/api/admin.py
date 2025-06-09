@@ -10,7 +10,6 @@ class CustomUserAdmin(BaseUserAdmin):
 
     # 1) Какие поля выводить в списке
     list_display = (
-        "nickname",
         'username',
         "email",
         "is_staff",
@@ -25,9 +24,9 @@ class CustomUserAdmin(BaseUserAdmin):
     # 3) Какие поля редактировать на странице «Изменить пользователя»
     fieldsets = (
         (None, {"fields": ("username", "email", "password")}),
-        (_("Personal info"), {"fields": ("first_name", "last_name", "nickname")}),
+        (_("Personal info"), {"fields": ("first_name", "last_name")}),
         (_("Permissions"), {
-            "fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions"),
+            "fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions", "roles"),
         }),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )
@@ -36,11 +35,11 @@ class CustomUserAdmin(BaseUserAdmin):
     add_fieldsets = (
         (None, {
             "classes": ("wide",),
-            "fields": ("username", "email", "name", "password1", "password2", "is_active", "is_staff"),
+            "fields": ("username", "email", "password1", "password2", "roles", "is_active", "is_staff"),
         }),
     )
 
-    search_fields = ("username", "email", "nickname")
+    search_fields = ("username", "email")
     ordering = ("email",)
 
 

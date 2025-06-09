@@ -3,13 +3,22 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 
 
+class Role(models.Model):
+    """
+    Роль пользователя: например 'admin', 'author', 'moderator' и т.п.
+    """
+    name = models.CharField(max_length=32, unique=True)
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+
+
 class CustomUser(AbstractUser):
     """
     Чтобы не использовать ФИО...
     """
-    nickname = models.CharField(max_length=64, blank=True)
-    email = models.EmailField(unique=True)
-    password = models.CharField(max_length=64, blank=True)
+    roles = models.ManyToManyField(Role, related_name="users", blank=True, help_text="Роли, присвоенные пользователю")
 
 
 class Profile(models.Model):
@@ -18,7 +27,7 @@ class Profile(models.Model):
     description = models.TextField(blank=True)
 
     def __str__(self):
-        return self.user.nickname
+        return self.user.username
 
 
 class FandomCategory(models.Model):
