@@ -14,9 +14,8 @@ class CustomUser(AbstractUser):
 
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
-    description = models.TextField(blank=True)
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
-    bio = models.TextField(blank=True)
+    description = models.TextField(blank=True)
 
     def __str__(self):
         return self.user.name

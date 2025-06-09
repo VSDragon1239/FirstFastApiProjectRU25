@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'starrylibrarry',
     'api',
+    'api.apps.ApiConfig',
     'ninja',
     'ninja_jwt',
     'ninja_extra',
