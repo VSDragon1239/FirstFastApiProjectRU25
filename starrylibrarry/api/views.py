@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from .auth import CookieJWTAuth
 from .schemas import *
 
-from .models import Role, Profile, FandomCategory, Fandom, TagCategory, Tag, Direction, Work, Chapter, Review
+from .models import Role, Profile, FandomCategory, Fandom, TagCategory, Tag, Direction, Work, Chapter, Review, Rating
 
 from ninja.responses import Response
 from ninja import Form, File, UploadedFile
@@ -104,7 +104,7 @@ class PublicController:
     def list_directions(self, request):
         return [DirectionOut.from_orm(d) for d in Direction.objects.all()]
 
-    @route.get("works", response=List[WorkOut])
+    @route.get("works/list", response=List[WorkOut])
     def list_works(self, request):
         items = []
         for w in Work.objects.select_related("direction").prefetch_related("tags", "fandoms").all():
@@ -112,6 +112,7 @@ class PublicController:
                 id=w.id,
                 name=w.name,
                 rating_count=w.rating_count,
+                rating=w.rating,
                 direction=DirectionOut.from_orm(w.direction),
                 tags=[TagOut.from_orm(t) for t in w.tags.all()],
                 fandoms=[FandomOut.from_orm(f) for f in w.fandoms.all()],
@@ -125,6 +126,7 @@ class PublicController:
             id=w.id,
             name=w.name,
             rating_count=w.rating_count,
+            rating=w.rating,
             direction=DirectionOut.from_orm(w.direction),
             tags=[TagOut.from_orm(t) for t in w.tags.all()],
             fandoms=[FandomOut.from_orm(f) for f in w.fandoms.all()],
@@ -253,13 +255,13 @@ class UserController:
 # AUTHOR END-POINTS heh ;0 --- --- --- АВТОРСКИЕ ЭНД-ПОИНТЫ
 # =====================
 @api_controller(
-    "/works",
+    "/content",
     auth=[JWTAuth()],
     permissions=[permissions.IsAuthenticated],
 )
 class ContentController:
 
-    @route.post("", response=WorkOut)
+    @route.post("work/create", response=WorkOut)
     def create_work(self, request, data: WorkIn):
         """
         POST /api/works/
@@ -274,6 +276,7 @@ class ContentController:
         w = Work.objects.create(
             author=request.user,
             name=data.name,
+            rating=data.rating,
             direction_id=data.direction_id
         )
         w.tags.set(data.tag_ids)
@@ -285,6 +288,7 @@ class ContentController:
         w = get_object_or_404(Work, pk=work_id, author=request.user)
         w.name = data.name
         w.direction_id = data.direction_id
+        w.rating = data.rating
         w.tags.set(data.tag_ids)
         w.fandoms.set(data.fandom_ids)
         w.save()
@@ -310,6 +314,7 @@ class ContentController:
                 id=w.id,
                 name=w.name,
                 rating_count=w.rating_count,
+                rating=w.rating,
                 direction=DirectionOut.from_orm(w.direction),
                 tags=[TagOut.from_orm(t) for t in w.tags.all()],
                 fandoms=[FandomOut.from_orm(f) for f in w.fandoms.all()],
@@ -317,7 +322,7 @@ class ContentController:
         ]
 
     @route.post("/{work_id}/chapters", response=ChapterOut)
-    def create_chapter(self, request, work_id: int, data: ChapterIn):
+    def create_chapter(self, request, work_id: int, data: ChapterIn, file: UploadedFile = File(None)):
         """
         POST /api/works/{work_id}/chapters
         {
@@ -493,6 +498,85 @@ class AdminController:
         f.delete()
         return 204, None
 
+    @route.post("directions", response=DirectionOut)
+    def create_direction(self, request, data: DirectionIn):
+        """
+        POST   /api/admin/directions
+        Создаёт новое направление.
+        """
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        d = Direction.objects.create(
+            name=data.name,
+            description=data.description or ""
+        )
+        return DirectionOut.from_orm(d)
+
+    @route.put("directions/{dir_id}", response=DirectionOut)
+    def update_direction(self, request, dir_id: int, data: DirectionIn):
+        """
+        PUT /api/admin/directions/{dir_id}
+        Обновляет направление.
+        """
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        d = get_object_or_404(Direction, pk=dir_id)
+        d.name = data.name
+        d.description = data.description or ""
+        d.save()
+        return DirectionOut.from_orm(d)
+
+    @route.delete("directions/{dir_id}", response={204: None})
+    def delete_direction(self, request, dir_id: int):
+        """
+        DELETE /api/admin/directions/{dir_id}
+        Удаляет направление.
+        """
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        d = get_object_or_404(Direction, pk=dir_id)
+        d.delete()
+        return (204, None)
+
+    @route.post("ratings", response=RatingOut)
+    def create_rating(self, request, data: RatingIn):
+        """
+        POST   /api/admin/directions
+        Создаёт новое направление.
+        """
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        d = Rating.objects.create(
+            name=data.name,
+            description=data.description or ""
+        )
+        return RatingOut.from_orm(d)
+
+    @route.put("ratings/{dir_id}", response=RatingOut)
+    def update_rating(self, request, dir_id: int, data: RatingIn):
+        """
+        PUT /api/admin/directions/{dir_id}
+        Обновляет направление.
+        """
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        d = get_object_or_404(Rating, pk=dir_id)
+        d.name = data.name
+        d.description = data.description or ""
+        d.save()
+        return RatingOut.from_orm(d)
+
+    @route.delete("ratings/{dir_id}", response={204: None})
+    def delete_rating(self, request, dir_id: int):
+        """
+        DELETE /api/admin/directions/{dir_id}
+        Удаляет направление.
+        """
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        d = get_object_or_404(Rating, pk=dir_id)
+        d.delete()
+        return 204, None
 
 #
 # =====================

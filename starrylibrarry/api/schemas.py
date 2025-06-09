@@ -104,9 +104,32 @@ class TagOut(Schema):
 
 
 # ----- Направления -----
+class DirectionIn(Schema):
+    name: str
+    description: str
+
+
 class DirectionOut(Schema):
     id: int
     name: str
+    description: str
+
+    class Config:
+        orm_mode = True
+
+# ----- Рейтинг -----
+class RatingIn(Schema):
+    name: str
+    description: str
+
+
+class RatingOut(Schema):
+    id: int
+    name: str
+    description: str
+
+    class Config:
+        orm_mode = True
 
 
 # ----- Произведения -----
@@ -116,14 +139,21 @@ class WorkIn(Schema):
     tag_ids: List[int]
     fandom_ids: List[int]
 
+    class Config:
+        orm_mode = True
+
 
 class WorkOut(Schema):
     id: int
     name: str
     rating_count: int
     direction: DirectionOut
+    rating: Optional[RatingOut]
     tags: List[TagOut]
     fandoms: List[FandomOut]
+
+    class Config:
+        orm_mode = True
 
 
 # ----- Главы -----

@@ -52,6 +52,18 @@ class Fandom(models.Model):
         return self.name
 
 
+class Character(models.Model):
+    """
+    Персонажи связанные с фанфиками
+    """
+    fandom = models.ForeignKey(Fandom, on_delete=models.CASCADE, related_name="characters")
+    name = models.CharField(max_length=64)
+    description = models.TextField()
+
+    def __str__(self):
+        return self.name
+
+
 class TagCategory(models.Model):
     """
     Категории тегов (типа жанры, предупреждения, праздники...)
@@ -85,6 +97,17 @@ class Direction(models.Model):
         return self.name
 
 
+class Rating(models.Model):
+    """
+    Рейтинг произведения
+    """
+    name = models.CharField(max_length=5)
+    description = models.TextField()
+
+    def __str__(self):
+        return self.name
+
+
 class Work(models.Model):
     """
     Самое центральное, что тут есть - произведение
@@ -93,6 +116,7 @@ class Work(models.Model):
     """
     author = models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.CASCADE,related_name="works")
     direction = models.ForeignKey(Direction, on_delete=models.SET_NULL, null=True, related_name="works")
+    rating = models.ForeignKey(Rating, on_delete=models.SET_NULL, null=True, related_name="works")
     name = models.CharField(max_length=64)
     rating_count = models.PositiveIntegerField(default=0)
 
@@ -124,6 +148,17 @@ class WorkFandom(models.Model):
 
     class Meta:
         unique_together = ("work", "fandom")
+
+
+class WorkCharacter(models.Model):
+    """
+    Промежуточная таблица для связи многие ко многим произведения и персонажам
+    """
+    work = models.ForeignKey(Work, on_delete=models.CASCADE)
+    character = models.ForeignKey(Character, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ("work", "character")
 
 
 class Chapter(models.Model):
