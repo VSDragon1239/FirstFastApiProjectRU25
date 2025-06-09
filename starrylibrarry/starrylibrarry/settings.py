@@ -38,7 +38,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'starrylibrarry',
-    'api',
     'api.apps.ApiConfig',
     'ninja',
     'ninja_jwt',
@@ -104,7 +103,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-AUTH_USER_MODEL = "users.CustomUser"
+AUTH_USER_MODEL = "api.CustomUser"
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/

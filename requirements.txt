@@ -19,3 +19,5 @@ email-validator==2.2.0
 
 uvicorn==0.34.2
 fastapi==0.115.12
+
+pillow==11.2.1

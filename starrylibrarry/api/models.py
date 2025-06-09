@@ -7,7 +7,7 @@ class CustomUser(AbstractUser):
     """
     Чтобы не использовать ФИО...
     """
-    name = models.CharField(max_length=64, blank=True)
+    nickname = models.CharField(max_length=64, blank=True)
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=64, blank=True)
 
@@ -18,7 +18,7 @@ class Profile(models.Model):
     description = models.TextField(blank=True)
 
     def __str__(self):
-        return self.user.name
+        return self.user.nickname
 
 
 class FandomCategory(models.Model):
