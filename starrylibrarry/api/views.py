@@ -3,6 +3,7 @@ from typing import List
 from django.contrib.auth import get_user_model, authenticate
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 
 
@@ -149,6 +150,23 @@ class PublicController:
         ch = get_object_or_404(Chapter, pk=ch_id)
         return ChapterOut(id=ch.id, work_id=ch.work_id, title=ch.title, file=request.build_absolute_uri(ch.file.url))
 
+    @route.get("works/{work_id}/chapters/{ch_id}/content")
+    def get_chapter_content(self, request, work_id: int, ch_id: int):
+        """
+        GET /api/chapters/{ch_id}/content
+        ↪ возвращает сам файл главы (streaming response).
+        """
+        qs = Chapter.objects.filter(work_id=work_id)
+        ch = get_object_or_404(qs, pk=ch_id)
+
+        # Открываем файл в бинарном режиме и отдаём потоково.
+        # FileResponse сам выставит корректный Content-Type.
+        return FileResponse(
+            ch.file.open("rb"),
+            as_attachment=False,  # скачивать не заставляем
+            filename=ch.file.name.rsplit("/", 1)[-1],
+        )
+
 
 # =====================
 # AUTH END-POINTS heh ;0 --- --- --- АВТОРИЗОВАННЫЕ ЭНД-ПОИНТЫ
@@ -248,7 +266,7 @@ class ContentController:
         w = Work.objects.create(
             author=request.user,
             name=data.name,
-            rating=data.rating,
+            rating_id=data.rating_id,
             direction_id=data.direction_id
         )
         w.tags.set(data.tag_ids)
@@ -260,7 +278,7 @@ class ContentController:
         w = get_object_or_404(Work, pk=work_id, author=request.user)
         w.name = data.name
         w.direction_id = data.direction_id
-        w.rating = data.rating
+        w.rating_id = data.rating_id    # ← и тут
         w.tags.set(data.tag_ids)
         w.fandoms.set(data.fandom_ids)
         w.save()
@@ -286,7 +304,7 @@ class ContentController:
         ch = Chapter.objects.create(
             work=w,
             title=data.title,
-            file=data.file  # UploadedFile из запроса
+            file=file  # UploadedFile из запроса
         )
         return ChapterOut(
             id=ch.id,

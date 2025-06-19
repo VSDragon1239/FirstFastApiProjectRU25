@@ -159,7 +159,6 @@ class WorkOut(Schema):
 
 # ----- Главы -----
 class ChapterIn(Schema):
-    work_id: int
     title: str
     # file: File
 
