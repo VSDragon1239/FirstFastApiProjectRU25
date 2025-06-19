@@ -137,6 +137,7 @@ class WorkIn(Schema):
     name: str
     direction_id: int
     tag_ids: List[int]
+    rating_id: int
     fandom_ids: List[int]
 
     class Config:

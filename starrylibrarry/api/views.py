@@ -33,20 +33,6 @@ api.auth = [JWTAuth]
 # =====================
 @api_controller("/", auth=None, permissions=[permissions.AllowAny])
 class AuthController:
-    @route.post("register", response=UserOut)
-    def register(self, request, data: UserCreate):
-        user = User.objects.create_user(
-            username=data.username,
-            email=data.email,
-            password=data.password
-        )
-        return UserOut(
-            id=user.id,
-            username=user.username,
-            email=user.email,
-            roles=[]
-        )
-
     @route.post("login", response=TokenPairOut, auth=None, summary="Login with username & password")
     def login(self, request, data: LoginIn):
         """
@@ -75,6 +61,20 @@ class AuthController:
         response.set_cookie("refresh_token", str(refresh), httponly=True, samesite="Lax")
         return response
 
+    @route.post("register", response=UserOut)
+    def register(self, request, data: UserCreate):
+        user = User.objects.create_user(
+            username=data.username,
+            email=data.email,
+            password=data.password
+        )
+        return UserOut(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            roles=[]
+        )
+
 
 # =====================
 # PUBLIC END-POINTS heh ;0 --- --- --- ПУБЛИЧНЫЕ ЭНД-ПОИНТЫ
@@ -86,9 +86,9 @@ class PublicController:
     def list_fandom_categories(self, request):
         return [FandomCategoryOut.from_orm(fc) for fc in FandomCategory.objects.all()]
 
-    @route.get("fandom-categories/{cat_id}/fandoms", response=List[FandomOut])
-    def list_fandoms(self, request, cat_id: int):
-        cat = get_object_or_404(FandomCategory, pk=cat_id)
+    @route.get("fandom-categories/{fan_cat_id}/fandoms", response=List[FandomOut])
+    def list_fandoms(self, request, fan_cat_id: int):
+        cat = get_object_or_404(FandomCategory, pk=fan_cat_id)
         return [FandomOut.from_orm(f) for f in cat.fandoms.all()]
 
     @route.get("tag-categories", response=List[TagCategoryOut])
@@ -103,6 +103,10 @@ class PublicController:
     @route.get("directions", response=List[DirectionOut])
     def list_directions(self, request):
         return [DirectionOut.from_orm(d) for d in Direction.objects.all()]
+
+    @route.get("rating", response=List[RatingOut])
+    def list_rating(self, request):
+        return [RatingOut.from_orm(d) for d in Rating.objects.all()]
 
     @route.get("works/list", response=List[WorkOut])
     def list_works(self, request):
@@ -189,54 +193,6 @@ class UserController:
             description=prof.description
         )
 
-    # ----- Роли -----
-    @route.get("roles", response=List[RoleOut])
-    def list_roles(self, request):
-        return [RoleOut.from_orm(r) for r in Role.objects.all()]
-
-    @route.post("roles", response=RoleOut)
-    def create_role(self, request, data: RoleIn):
-        role = Role.objects.create(**data.dict())
-        return RoleOut.from_orm(role)
-
-    @route.put("roles/{role_id}", response=RoleOut)
-    def update_role(self, request, role_id: int, data: RoleIn):
-        role = get_object_or_404(Role, pk=role_id)
-        for f, v in data.dict().items():
-            setattr(role, f, v)
-        role.save()
-        return RoleOut.from_orm(role)
-
-    @route.delete("roles/{role_id}", response={204: None})
-    def delete_role(self, request, role_id: int):
-        role = get_object_or_404(Role, pk=role_id)
-        role.delete()
-        return 204, None
-
-    # ----- Управление ролями пользователя -----
-    @route.get("users/{user_id}/roles", response=List[RoleOut])
-    def list_user_roles(self, request, user_id: int):
-        u = get_object_or_404(User, pk=user_id)
-        return [RoleOut.from_orm(r) for r in u.roles.all()]
-
-    @route.post("users/{user_id}/roles", response=RoleOut)
-    def add_user_role(self, request, user_id: int, data: RoleIn):
-        if not request.user.is_staff:
-            raise HttpError(403, "Только staff может выдавать роли")
-        u = get_object_or_404(User, pk=user_id)
-        role, _ = Role.objects.get_or_create(name=data.name)
-        u.roles.add(role)
-        return RoleOut.from_orm(role)
-
-    @route.delete("users/{user_id}/roles/{role_id}", response={204: None})
-    def remove_user_role(self, request, user_id: int, role_id: int):
-        if not request.user.is_staff:
-            raise HttpError(403, "Только staff может снимать роли")
-        u = get_object_or_404(User, pk=user_id)
-        role = get_object_or_404(Role, pk=role_id)
-        u.roles.remove(role)
-        return 204, None
-
     # # ----- CRUD для контента (пример для Work) -----
     # @route.post("works", response=WorkOut)
     # def create_work(self, request, data: WorkIn):
@@ -254,12 +210,28 @@ class UserController:
 # =====================
 # AUTHOR END-POINTS heh ;0 --- --- --- АВТОРСКИЕ ЭНД-ПОИНТЫ
 # =====================
-@api_controller(
-    "/content",
-    auth=[JWTAuth()],
-    permissions=[permissions.IsAuthenticated],
-)
+@api_controller("/content", auth=[JWTAuth()], permissions=[permissions.IsAuthenticated],)
 class ContentController:
+    @route.get("", response=List[WorkOut])
+    def list_my_works(self, request):
+        """
+        GET /api/works/
+        ➔ список произведений текущего пользователя
+        """
+        qs = Work.objects.filter(author=request.user) \
+            .select_related("direction") \
+            .prefetch_related("tags", "fandoms")
+        return [
+            WorkOut(
+                id=w.id,
+                name=w.name,
+                rating_count=w.rating_count,
+                rating=w.rating,
+                direction=DirectionOut.from_orm(w.direction),
+                tags=[TagOut.from_orm(t) for t in w.tags.all()],
+                fandoms=[FandomOut.from_orm(f) for f in w.fandoms.all()],
+            ) for w in qs
+        ]
 
     @route.post("work/create", response=WorkOut)
     def create_work(self, request, data: WorkIn):
@@ -299,27 +271,6 @@ class ContentController:
         w = get_object_or_404(Work, pk=work_id, author=request.user)
         w.delete()
         return 204, None
-
-    @route.get("", response=List[WorkOut])
-    def list_my_works(self, request):
-        """
-        GET /api/works/
-        ➔ список произведений текущего пользователя
-        """
-        qs = Work.objects.filter(author=request.user) \
-                         .select_related("direction") \
-                         .prefetch_related("tags", "fandoms")
-        return [
-            WorkOut(
-                id=w.id,
-                name=w.name,
-                rating_count=w.rating_count,
-                rating=w.rating,
-                direction=DirectionOut.from_orm(w.direction),
-                tags=[TagOut.from_orm(t) for t in w.tags.all()],
-                fandoms=[FandomOut.from_orm(f) for f in w.fandoms.all()],
-            ) for w in qs
-        ]
 
     @route.post("/{work_id}/chapters", response=ChapterOut)
     def create_chapter(self, request, work_id: int, data: ChapterIn, file: UploadedFile = File(None)):
@@ -367,6 +318,67 @@ class ContentController:
 # =====================
 @api_controller("/admin", auth=[JWTAuth()], permissions=[permissions.IsAuthenticated])
 class AdminController:
+
+    # --- Категории фэндомов ---
+    @route.post("fandom-categories", response=FandomCategoryOut)
+    def create_fandom_category(self, request, data: FandomCategoryIn):
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        fc = FandomCategory.objects.create(**data.dict())
+        return FandomCategoryOut.from_orm(fc)
+
+    @route.put("fandom-categories/{cat_id}", response=FandomCategoryOut)
+    def update_fandom_category(self, request, cat_id: int, data: FandomCategoryIn):
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        fc = get_object_or_404(FandomCategory, pk=cat_id)
+        fc.name = data.name
+        fc.save()
+        return FandomCategoryOut.from_orm(fc)
+
+    @route.delete("fandom-categories/{cat_id}", response={204: None})
+    def delete_fandom_category(self, request, cat_id: int):
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        fc = get_object_or_404(FandomCategory, pk=cat_id)
+        fc.delete()
+        return 204, None
+
+    # --- Фэндомы ---
+    @route.post("fandoms", response=FandomOut)
+    def create_fandom(self, request, data: FandomIn):
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        category = get_object_or_404(FandomCategory, pk=data.category_id)
+        f = Fandom.objects.create(category=category, name=data.name)
+        return FandomOut(
+            id=f.id,
+            name=f.name,
+            category=FandomCategoryOut.from_orm(category)
+        )
+
+    @route.put("fandoms/{fandom_id}", response=FandomOut)
+    def update_fandom(self, request, fandom_id: int, data: FandomIn):
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        f = get_object_or_404(Fandom, pk=fandom_id)
+        category = get_object_or_404(FandomCategory, pk=data.category_id)
+        f.category = category
+        f.name = data.name
+        f.save()
+        return FandomOut(
+            id=f.id,
+            name=f.name,
+            category=FandomCategoryOut.from_orm(category)
+        )
+
+    @route.delete("fandoms/{fandom_id}", response={204: None})
+    def delete_fandom(self, request, fandom_id: int):
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        f = get_object_or_404(Fandom, pk=fandom_id)
+        f.delete()
+        return 204, None
 
     # --- Категории тегов ---
     @route.post("tag-categories", response=TagCategoryOut)
@@ -435,67 +447,6 @@ class AdminController:
             raise HttpError(403, "Forbidden")
         tag = get_object_or_404(Tag, pk=tag_id)
         tag.delete()
-        return 204, None
-
-    # --- Категории фэндомов ---
-    @route.post("fandom-categories", response=FandomCategoryOut)
-    def create_fandom_category(self, request, data: FandomCategoryIn):
-        if not request.user.is_staff:
-            raise HttpError(403, "Forbidden")
-        fc = FandomCategory.objects.create(**data.dict())
-        return FandomCategoryOut.from_orm(fc)
-
-    @route.put("fandom-categories/{cat_id}", response=FandomCategoryOut)
-    def update_fandom_category(self, request, cat_id: int, data: FandomCategoryIn):
-        if not request.user.is_staff:
-            raise HttpError(403, "Forbidden")
-        fc = get_object_or_404(FandomCategory, pk=cat_id)
-        fc.name = data.name
-        fc.save()
-        return FandomCategoryOut.from_orm(fc)
-
-    @route.delete("fandom-categories/{cat_id}", response={204: None})
-    def delete_fandom_category(self, request, cat_id: int):
-        if not request.user.is_staff:
-            raise HttpError(403, "Forbidden")
-        fc = get_object_or_404(FandomCategory, pk=cat_id)
-        fc.delete()
-        return 204, None
-
-    # --- Фэндомы ---
-    @route.post("fandoms", response=FandomOut)
-    def create_fandom(self, request, data: FandomIn):
-        if not request.user.is_staff:
-            raise HttpError(403, "Forbidden")
-        category = get_object_or_404(FandomCategory, pk=data.category_id)
-        f = Fandom.objects.create(category=category, name=data.name)
-        return FandomOut(
-            id=f.id,
-            name=f.name,
-            category=FandomCategoryOut.from_orm(category)
-        )
-
-    @route.put("fandoms/{fandom_id}", response=FandomOut)
-    def update_fandom(self, request, fandom_id: int, data: FandomIn):
-        if not request.user.is_staff:
-            raise HttpError(403, "Forbidden")
-        f = get_object_or_404(Fandom, pk=fandom_id)
-        category = get_object_or_404(FandomCategory, pk=data.category_id)
-        f.category = category
-        f.name = data.name
-        f.save()
-        return FandomOut(
-            id=f.id,
-            name=f.name,
-            category=FandomCategoryOut.from_orm(category)
-        )
-
-    @route.delete("fandoms/{fandom_id}", response={204: None})
-    def delete_fandom(self, request, fandom_id: int):
-        if not request.user.is_staff:
-            raise HttpError(403, "Forbidden")
-        f = get_object_or_404(Fandom, pk=fandom_id)
-        f.delete()
         return 204, None
 
     @route.post("directions", response=DirectionOut)
@@ -578,6 +529,14 @@ class AdminController:
         d.delete()
         return 204, None
 
+    @route.delete("works/{work_id}", response={204: None})
+    def delete_work(self, request, work_id: int):
+        if not request.user.is_staff:
+            raise HttpError(403, "Forbidden")
+        w = get_object_or_404(Work, pk=work_id, author=request.user)
+        w.delete()
+        return 204, None
+
 #
 # =====================
 # AUTH END-POINTS heh ;0 --- --- --- АВТОРИЗОВАННЫЕ ЭНД-ПОИНТЫ для группы... (УЖЕ НЕ НАДО!!!)
@@ -628,9 +587,59 @@ class AdminController:
 
 # Чтобы было видно...
 api.register_controllers(
+    AuthController,
     UserController,
     PublicController,
-    AdminController,
-    AuthController,
     ContentController,
+    AdminController,
 )
+
+
+
+# # ----- Роли -----
+# @route.get("roles", response=List[RoleOut])
+# def list_roles(self, request):
+#     return [RoleOut.from_orm(r) for r in Role.objects.all()]
+#
+# @route.post("roles", response=RoleOut)
+# def create_role(self, request, data: RoleIn):
+#     role = Role.objects.create(**data.dict())
+#     return RoleOut.from_orm(role)
+#
+# @route.put("roles/{role_id}", response=RoleOut)
+# def update_role(self, request, role_id: int, data: RoleIn):
+#     role = get_object_or_404(Role, pk=role_id)
+#     for f, v in data.dict().items():
+#         setattr(role, f, v)
+#     role.save()
+#     return RoleOut.from_orm(role)
+#
+# @route.delete("roles/{role_id}", response={204: None})
+# def delete_role(self, request, role_id: int):
+#     role = get_object_or_404(Role, pk=role_id)
+#     role.delete()
+#     return 204, None
+#
+# # ----- Управление ролями пользователя -----
+# @route.get("users/{user_id}/roles", response=List[RoleOut])
+# def list_user_roles(self, request, user_id: int):
+#     u = get_object_or_404(User, pk=user_id)
+#     return [RoleOut.from_orm(r) for r in u.roles.all()]
+#
+# @route.post("users/{user_id}/roles", response=RoleOut)
+# def add_user_role(self, request, user_id: int, data: RoleIn):
+#     if not request.user.is_staff:
+#         raise HttpError(403, "Только staff может выдавать роли")
+#     u = get_object_or_404(User, pk=user_id)
+#     role, _ = Role.objects.get_or_create(name=data.name)
+#     u.roles.add(role)
+#     return RoleOut.from_orm(role)
+#
+# @route.delete("users/{user_id}/roles/{role_id}", response={204: None})
+# def remove_user_role(self, request, user_id: int, role_id: int):
+#     if not request.user.is_staff:
+#         raise HttpError(403, "Только staff может снимать роли")
+#     u = get_object_or_404(User, pk=user_id)
+#     role = get_object_or_404(Role, pk=role_id)
+#     u.roles.remove(role)
+#     return 204, None
