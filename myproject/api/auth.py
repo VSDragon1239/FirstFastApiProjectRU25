@@ -1,5 +1,5 @@
 from django.http import HttpRequest
-from ninja_extra.security import HttpBearer
+from ninja.security import HttpBearer
 from ninja_jwt.authentication import JWTBaseAuthentication
 
 

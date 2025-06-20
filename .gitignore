@@ -1,4 +1,5 @@
 .idea
 .venv
-myproject/api/migrations
-myproject/db.sqlite3
+shopapi
+NinjaAPI
+Lab2Ninjaapi-main
